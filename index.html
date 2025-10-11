@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>学校食堂 - 生徒用サイト</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🍽️ 学校食堂</h1>
+      <p>生徒用サイト</p>
+    </header>
+
+    <main>
+      <section class="status-section">
+        <h2>📅 営業状況</h2>
+        <div id="status-display" class="status-card"></div>
+      </section>
+
+      <section class="info-section">
+        <h2>📅 今後の休業日</h2>
+        <div id="holidays-list" class="info-card"></div>
+      </section>
+
+      <section class="info-section">
+        <h2>📅 営業カレンダー</h2>
+        <div id="calendar" class="info-card calendar-container"></div>
+      </section>
+
+      <section class="links-section">
+        <h2>🔗 便利なリンク</h2>
+        <div class="link-cards">
+          <a href="reservation.html" class="link-card">
+            <div class="link-icon">📝</div>
+            <h3>予約サイト</h3>
+          </a>
+          <a href="chatgpt.html" class="link-card">
+            <div class="link-icon">🤖</div>
+            <h3>食堂専用ChatGPT</h3>
+          </a>
+        </div>
+      </section>
+
+      <section class="info-section">
+        <h2>🔗 URLリンク</h2>
+        <div id="page-links" class="info-card"></div>
+      </section>
+    </main>
+
+    <footer>
+      <p>&copy; 2025 学校食堂管理システム</p>
+    </footer>
+  </div>
+
+  <script>
+    function loadStatus() {
+      const holidays = JSON.parse(localStorage.getItem("holidays") || "[]");
+      const statusDiv = document.getElementById("status-display");
+      const today = new Date().toISOString().split("T")[0];
+      const todayHoliday = holidays.find(h => h.date === today);
+
+      if (todayHoliday) {
+        statusDiv.innerHTML = `<p>🚫 本日（${today}）は休業です。<br>理由: ${todayHoliday.reason}</p>`;
+      } else {
+        statusDiv.innerHTML = `<p>✅ 本日は営業中です。</p>`;
+      }
+
+      // 今後の休業日
+      const listDiv = document.getElementById("holidays-list");
+      if (holidays.length === 0) {
+        listDiv.innerHTML = "<p>登録された休業日はありません。</p>";
+        return;
+      }
+      listDiv.innerHTML = holidays
+        .map(h => `<p>📅 ${h.date}　📝 ${h.reason}</p>`)
+        .join("");
+    }
+
+    // カレンダーを生成
+    function generateCalendar() {
+      const calendarDiv = document.getElementById('calendar');
+      const holidays = JSON.parse(localStorage.getItem("holidays") || "[]");
+      const today = new Date();
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+      
+      // 月の最初の日と最後の日を取得
+      const firstDay = new Date(currentYear, currentMonth, 1);
+      const lastDay = new Date(currentYear, currentMonth + 1, 0);
+      const daysInMonth = lastDay.getDate();
+      const startingDayOfWeek = firstDay.getDay();
+      
+      // カレンダーヘッダー
+      const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', 
+                         '7月', '8月', '9月', '10月', '11月', '12月'];
+      const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+      
+      let calendarHTML = `
+        <div class="calendar-header">
+          <h4>${currentYear}年 ${monthNames[currentMonth]}</h4>
+        </div>
+        <div class="calendar-grid">
+          <div class="calendar-weekdays">
+      `;
+      
+      // 曜日ヘッダー
+      dayNames.forEach(day => {
+        calendarHTML += `<div class="calendar-weekday">${day}</div>`;
+      });
+      calendarHTML += `</div><div class="calendar-days">`;
+      
+      // 空白の日付（月の最初の日より前）
+      for (let i = 0; i < startingDayOfWeek; i++) {
+        calendarHTML += `<div class="calendar-day empty"></div>`;
+      }
+      
+      // 実際の日付
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateString = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayOfWeek = new Date(currentYear, currentMonth, day).getDay();
+        const isHoliday = holidays.find(h => h.date === dateString);
+        const isSunday = dayOfWeek === 0;
+        const isSaturday = dayOfWeek === 6;
+        
+        let dayClass = 'calendar-day';
+        let dayContent = day;
+        
+        if (isHoliday) {
+          dayClass += ' holiday';
+          dayContent = `${day}<br><small>${isHoliday.reason}</small>`;
+        } else if (isSunday) {
+          dayClass += ' sunday';
+        } else if (isSaturday) {
+          dayClass += ' saturday';
+        } else {
+          dayClass += ' weekday';
+        }
+        
+        calendarHTML += `<div class="${dayClass}">${dayContent}</div>`;
+      }
+      
+      calendarHTML += `</div></div>`;
+      calendarDiv.innerHTML = calendarHTML;
+    }
+
+    function renderLinks() {
+      const base = window.location.href.replace(/[^/]*$/, '');
+      const pages = [
+        { name: '生徒用サイト (index.html)', file: 'index.html' },
+        { name: '管理者サイト (admin.html)', file: 'admin.html' },
+        { name: '予約サイト (reservation.html)', file: 'reservation.html' },
+        { name: '食堂専用ChatGPT (chatgpt.html)', file: 'chatgpt.html' }
+      ];
+      const linksDiv = document.getElementById('page-links');
+      linksDiv.innerHTML = pages.map(p => {
+        const url = base + p.file;
+        return `<p><strong>${p.name}:</strong> <a href="${url}">${url}</a></p>`;
+      }).join('');
+    }
+
+    window.onload = function() {
+      loadStatus();
+      generateCalendar();
+      renderLinks();
+    };
+  </script>
+</body>
+</html>
