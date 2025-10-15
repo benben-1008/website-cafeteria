@@ -53,6 +53,9 @@
 
         <div class="admin-card">
           <h3>現在のメニュー一覧</h3>
+          <div style="margin-bottom:10px;">
+            <button onclick="resetMenuStocks()" class="btn btn-secondary">残数をリセット</button>
+          </div>
           <div id="menu-list"></div>
         </div>
       </section>
@@ -112,6 +115,18 @@
       const list = document.getElementById("menu-list");
       list.innerHTML = "";
 
+      // 既存データの初期在庫フィールドを補完（初回のみ）
+      let needsSave = false;
+      menus.forEach(m => {
+        if (typeof m.initialStock !== 'number' || m.initialStock <= 0) {
+          m.initialStock = m.stock;
+          needsSave = true;
+        }
+      });
+      if (needsSave) {
+        localStorage.setItem("menuItems", JSON.stringify(menus));
+      }
+
       if (menus.length === 0) {
         list.innerHTML = "<p>メニューが登録されていません。</p>";
         return;
@@ -134,7 +149,7 @@
       if (!name || stock <= 0) return alert("メニュー名と提供数を正しく入力してください。");
 
       const menus = JSON.parse(localStorage.getItem("menuItems") || "[]");
-      menus.push({ name, stock });
+      menus.push({ name, stock, initialStock: stock });
       localStorage.setItem("menuItems", JSON.stringify(menus));
 
       document.getElementById("menu-name").value = "";
@@ -219,6 +234,39 @@
         ? reservations.map(r => `<p>👤 ${r.name} 🍽️ ${r.food}</p>`).join("")
         : "<p>予約はありません。</p>";
     }
+
+    // === 残数リセット ===
+    function resetMenuStocks() {
+  if (!confirm('本当にリセットしますか？\n全メニューの残数を初期値に戻します。')) {
+    return;
+  }
+
+  let menus = JSON.parse(localStorage.getItem("menuItems") || "[]");
+
+  if (menus.length === 0) {
+    alert("メニューがありません。");
+    return;
+  }
+
+  // 🔹 initialStock が存在しない古いデータのための補完
+  menus = menus.map(m => {
+    // もし initialStock が無ければ、現在の stock を初期値として保存
+    if (typeof m.initialStock !== "number" || m.initialStock <= 0) {
+      m.initialStock = m.stock;
+    }
+    // リセット処理：残数を初期値に戻す
+    m.stock = m.initialStock;
+    return m;
+  });
+
+  localStorage.setItem("menuItems", JSON.stringify(menus));
+
+  // メニューを再読み込み
+  loadMenus();
+
+  alert("全メニューの残数を初期値にリセットしました。");
+}
+
 
     // === 起動時 ===
     function renderLinks() {
