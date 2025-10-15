@@ -221,7 +221,21 @@
     }
 
     // === 起動時 ===
-    
+    function renderLinks() {
+      const base = window.location.href.replace(/[^/]*$/, '');
+      const pages = [
+        { name: '生徒用サイト (index.html)', file: 'index.html' },
+        { name: '管理者サイト (admin.html)', file: 'admin.html' },
+        { name: '予約サイト (reservation.html)', file: 'reservation.html' },
+        { name: '食堂専用ChatGPT (chatgpt.html)', file: 'chatgpt.html' }
+      ];
+      const linksDiv = document.getElementById('page-links');
+      if (!linksDiv) return;
+      linksDiv.innerHTML = pages.map(p => {
+        const url = base + p.file;
+        return `<p><strong>${p.name}:</strong> <a href="${url}">${url}</a></p>`;
+      }).join('');
+    }
 
     window.onload = function() {
       loadMenus();
