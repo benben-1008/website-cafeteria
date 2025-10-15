@@ -35,6 +35,53 @@
           </form>
         </div>
       </section>
+      
+      <section class="menu-table-section">
+        <div class="reservation-card">
+          <h2>📋 メニュー一覧</h2>
+          <table class="menu-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr>
+                <th style="text-align: left; border-bottom: 1px solid #ddd; padding: 8px;">メニュー</th>
+                <th style="text-align: right; border-bottom: 1px solid #ddd; padding: 8px;">値段（円）</th>
+                <th style="text-align: left; border-bottom: 1px solid #ddd; padding: 8px;">アレルギー</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">日替わり定食</td>
+                <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f0f0f0;">550</td>
+                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">未定</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">日替わり丼</td>
+                <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f0f0f0;">450</td>
+                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">未定</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">カレーライス</td>
+                <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f0f0f0;">450</td>
+                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">米</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">カツカレー</td>
+                <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f0f0f0;">500</td>
+                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">米</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">醤油ラーメン</td>
+                <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f0f0f0;">450</td>
+                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">小麦</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px;">かけうどん</td>
+                <td style="padding: 8px; text-align: right;">350</td>
+                <td style="padding: 8px;">小麦</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
 
     <footer>
@@ -96,25 +143,7 @@
       document.getElementById("reservation-form").reset();
     }
 
-    function renderLinks() {
-      const base = window.location.href.replace(/[^/]*$/, '');
-      const container = document.createElement('section');
-      container.className = 'info-section';
-      container.innerHTML = `
-        <h2>🔗 URLリンク</h2>
-        <div class="info-card">
-          <p><strong>生徒用サイト (index.html):</strong> <a href="${base}index.html">${base}index.html</a></p>
-          <p><strong>管理者サイト (admin.html):</strong> <a href="${base}admin.html">${base}admin.html</a></p>
-          <p><strong>予約サイト (reservation.html):</strong> <a href="${base}reservation.html">${base}reservation.html</a></p>
-          <p><strong>食堂専用ChatGPT (chatgpt.html):</strong> <a href="${base}chatgpt.html">${base}chatgpt.html</a></p>
-        </div>`;
-      document.querySelector('main').appendChild(container);
-    }
-
-    window.onload = function() {
-      loadMenuOptions();
-      renderLinks();
-    };
+    window.onload = loadMenuOptions;
   </script>
 </body>
 </html>
