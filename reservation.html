@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>食堂予約システム</title>
   <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
   <div class="container">
     <header>
@@ -17,6 +19,14 @@
       <section class="reservation-section">
         <div class="reservation-card">
           <h2>📝 予約フォーム</h2>
+
+          <!-- 予約時間表示 -->
+          <div id="reservation-time-info"
+            style="margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+            <h3 style="margin: 0 0 10px 0; color: #495057;">⏰ 予約可能時間</h3>
+            <div id="time-display">読み込み中...</div>
+          </div>
+
           <form id="reservation-form">
             <div class="form-group">
               <label for="student-name">お名前 *</label>
@@ -35,7 +45,7 @@
           </form>
         </div>
       </section>
-      
+
       <section class="menu-table-section">
         <div class="reservation-card">
           <h2>📋 メニュー一覧</h2>
@@ -95,9 +105,24 @@
   </div>
 
   <script>
-    function loadMenuOptions() {
+    const API_BASE = 'api/';
+    async function apiGet(path) {
+      const res = await fetch(API_BASE + path, { cache: 'no-store' });
+      if (!res.ok) throw new Error('GET failed: ' + path);
+      return await res.json();
+    }
+    async function apiPost(path, data) {
+      const res = await fetch(API_BASE + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('POST failed: ' + path);
+      return await res.json();
+    }
+    async function loadMenuOptions() {
       const select = document.getElementById("food");
-      const menus = JSON.parse(localStorage.getItem("menuItems") || "[]");
+      const menus = await apiGet('menu.php');
       select.innerHTML = "";
 
       if (menus.length === 0) {
@@ -109,35 +134,96 @@
       menus.forEach(menu => {
         const option = document.createElement("option");
         option.value = menu.name;
-        option.textContent = menu.stock > 0 
-          ? `${menu.name}（残り${menu.stock}食）`
-          : `${menu.name}（売り切れ）`;
-        option.disabled = menu.stock <= 0;
+
+        if (menu.stock === -1) {
+          // 無制限メニュー
+          option.textContent = `${menu.name}（無制限）`;
+          option.disabled = false;
+        } else if (menu.stock > 0) {
+          // 通常メニュー（在庫あり）
+          option.textContent = `${menu.name}（残り${menu.stock}食）`;
+          option.disabled = false;
+        } else {
+          // 売り切れ
+          option.textContent = `${menu.name}（売り切れ）`;
+          option.disabled = true;
+        }
+
         select.appendChild(option);
       });
     }
 
-    document.getElementById("reservation-form").addEventListener("submit", e => {
+    // 予約時間チェック機能
+    async function checkReservationTime() {
+      try {
+        const times = await apiGet('reservation-times.php');
+        const timeDisplay = document.getElementById('time-display');
+
+        if (!times || !times.enabled) {
+          timeDisplay.innerHTML = '<p style="color: #28a745;">✅ 予約時間制限なし（いつでも予約可能）</p>';
+          return true;
+        }
+
+        const now = new Date();
+        const currentTime = now.toTimeString().slice(0, 5); // HH:MM形式
+        const startTime = times.startTime;
+        const endTime = times.endTime;
+
+        const isWithinTime = currentTime >= startTime && currentTime <= endTime;
+
+        if (isWithinTime) {
+          timeDisplay.innerHTML = `
+            <p style="color: #28a745;">✅ 現在予約可能です</p>
+            <p style="font-size: 14px; color: #6c757d;">予約時間: ${startTime} - ${endTime}</p>
+            <p style="font-size: 14px; color: #6c757d;">現在時刻: ${currentTime}</p>
+          `;
+        } else {
+          timeDisplay.innerHTML = `
+            <p style="color: #dc3545;">❌ 現在は予約時間外です</p>
+            <p style="font-size: 14px; color: #6c757d;">予約時間: ${startTime} - ${endTime}</p>
+            <p style="font-size: 14px; color: #6c757d;">現在時刻: ${currentTime}</p>
+            <p style="font-size: 14px; color: #6c757d;">${times.message}</p>
+          `;
+        }
+
+        return isWithinTime;
+      } catch (error) {
+        console.error('予約時間チェックエラー:', error);
+        document.getElementById('time-display').innerHTML = '<p style="color: #dc3545;">❌ 予約時間の確認に失敗しました</p>';
+        return false;
+      }
+    }
+
+    document.getElementById("reservation-form").addEventListener("submit", async e => {
       e.preventDefault();
       const name = document.getElementById("student-name").value.trim();
       const food = document.getElementById("food").value;
       if (!name || !food) return alert("全ての項目を入力してください。");
 
-      const menus = JSON.parse(localStorage.getItem("menuItems") || "[]");
+      // 予約時間チェック
+      const isWithinTime = await checkReservationTime();
+      if (!isWithinTime) {
+        alert("現在は予約時間外です。予約可能時間内に再度お試しください。");
+        return;
+      }
+
+      const menus = await apiGet('menu.php');
       const menu = menus.find(m => m.name === food);
-      if (!menu || menu.stock <= 0) {
+      if (!menu || (menu.stock !== -1 && menu.stock <= 0)) {
         alert("このメニューは売り切れです。");
         return;
       }
 
       // 予約登録
-      const reservations = JSON.parse(localStorage.getItem("reservations") || "[]");
+      const reservations = await apiGet('reservations.php');
       reservations.push({ name, food, createdAt: new Date().toISOString() });
-      localStorage.setItem("reservations", JSON.stringify(reservations));
+      await apiPost('reservations.php', reservations);
 
-      // 在庫を減らす
-      menu.stock -= 1;
-      localStorage.setItem("menuItems", JSON.stringify(menus));
+      // 在庫を減らす（無制限メニューは除く）
+      if (menu.stock !== -1) {
+        menu.stock -= 1;
+        await apiPost('menu.php', menus);
+      }
 
       alert("予約が完了しました！");
       document.getElementById("reservation-form").reset();
@@ -153,7 +239,7 @@
       const pages = [
         { name: '生徒用サイト (index.html)', file: 'index.html' },
         { name: '予約サイト (reservation.html)', file: 'reservation.html' },
-        { name: '食堂専用ChatGPT (chatgpt.html)', file: 'chatgpt.html' }
+        { name: '食堂専用AIアシスタント (ai-assistant-php.html)', file: 'ai-assistant-php.html' }
       ];
       const linksDiv = document.getElementById('page-links');
       if (!linksDiv) return;
@@ -163,10 +249,15 @@
       }).join('');
     }
 
-    window.onload = function() {
+    window.onload = function () {
       loadMenuOptions();
+      checkReservationTime();
       renderLinks();
+
+      // 1分ごとに予約時間をチェック
+      setInterval(checkReservationTime, 60000);
     };
   </script>
 </body>
+
 </html>

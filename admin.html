@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,15 +18,18 @@
       padding: 10px;
       border-radius: 8px;
     }
+
     .calendar div {
       padding: 5px;
     }
+
     .holiday {
       background-color: #ffcccc;
       border-radius: 6px;
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <header>
@@ -46,7 +50,15 @@
           </div>
           <div class="form-group">
             <label for="menu-stock">提供可能数:</label>
-            <input type="number" id="menu-stock" placeholder="例: 30" required>
+            <input type="number" id="menu-stock" placeholder="例: 30">
+          </div>
+          <div class="form-group">
+            <label
+              style="display: flex; align-items: center; font-weight: bold; color: #e74c3c; font-size: 16px; padding: 12px; background-color: #fff5f5; border: 2px solid #e74c3c; border-radius: 8px; cursor: pointer; transition: all 0.3s ease;">
+              <input type="checkbox" id="unlimited-stock" onchange="toggleStockInput()"
+                style="margin-right: 12px; transform: scale(2.0); cursor: pointer;">
+              ♾️ 無制限で提供（在庫管理なし）
+            </label>
           </div>
           <button onclick="addMenu()" class="btn btn-primary">メニューを追加</button>
         </div>
@@ -75,7 +87,7 @@
           </div>
           <button onclick="addHoliday()" class="btn btn-primary">休業日を追加</button>
         </div>
-  
+
         <div class="admin-card">
           <h3>🗓 カレンダー表示</h3>
           <div id="calendar" class="calendar"></div>
@@ -87,11 +99,67 @@
         </div>
       </section>
 
+      <!-- 🔹 定食設定 -->
+      <section class="admin-section">
+        <h2>🍽️ 定食設定</h2>
+        <div class="admin-card">
+          <h3>日別定食を設定</h3>
+          <div class="form-group">
+            <label for="daily-menu-date">日付:</label>
+            <input type="date" id="daily-menu-date" required>
+          </div>
+          <div class="form-group">
+            <label for="daily-menu-food">定食メニュー:</label>
+            <input type="text" id="daily-menu-food" placeholder="例: カレーライス、日替わり定食" required>
+          </div>
+          <button onclick="addDailyMenu()" class="btn btn-primary">定食を設定</button>
+        </div>
+
+        <div class="admin-card">
+          <h3>現在の定食設定一覧</h3>
+          <div id="daily-menu-list"></div>
+        </div>
+      </section>
+
+      <!-- 🔹 予約時間設定 -->
+      <section class="admin-section">
+        <h2>⏰ 予約時間設定</h2>
+        <div class="admin-card">
+          <h3>予約可能時間を設定</h3>
+          <div class="form-group">
+            <label for="reservation-start-time">開始時間:</label>
+            <input type="time" id="reservation-start-time" required>
+          </div>
+          <div class="form-group">
+            <label for="reservation-end-time">終了時間:</label>
+            <input type="time" id="reservation-end-time" required>
+          </div>
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="reservation-enabled" checked> 予約時間制限を有効にする
+            </label>
+          </div>
+          <div class="form-group">
+            <label for="reservation-message">表示メッセージ:</label>
+            <input type="text" id="reservation-message" placeholder="例: 予約時間: 11:30-12:45">
+          </div>
+          <button onclick="updateReservationTimes()" class="btn btn-primary">予約時間を更新</button>
+        </div>
+
+        <div class="admin-card">
+          <h3>現在の予約時間設定</h3>
+          <div id="reservation-times-display"></div>
+        </div>
+      </section>
+
       <!-- 🔹 予約一覧 -->
       <section class="admin-section">
         <h2>📝 予約一覧</h2>
         <div class="admin-card">
           <h3>予約状況</h3>
+          <div style="margin-bottom:10px;">
+            <button onclick="resetReservations()" class="btn btn-danger">予約をリセット</button>
+          </div>
           <div id="reservations-list"></div>
         </div>
       </section>
@@ -109,11 +177,41 @@
   </div>
 
   <script>
+    // === API ヘルパー ===
+    const API_BASE = 'api/';
+    async function apiGet(path) {
+      const res = await fetch(API_BASE + path, { cache: 'no-store' });
+      if (!res.ok) throw new Error('GET failed: ' + path);
+      return await res.json();
+    }
+    async function apiPost(path, data) {
+      const res = await fetch(API_BASE + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('POST failed: ' + path);
+      return await res.json();
+    }
     // === メニュー管理 ===
-    function loadMenus() {
-      const menus = JSON.parse(localStorage.getItem("menuItems") || "[]");
+    function toggleStockInput() {
+      const stockInput = document.getElementById("menu-stock");
+      const unlimitedCheckbox = document.getElementById("unlimited-stock");
+
+      if (unlimitedCheckbox.checked) {
+        stockInput.disabled = true;
+        stockInput.value = "";
+        stockInput.placeholder = "無制限";
+      } else {
+        stockInput.disabled = false;
+        stockInput.placeholder = "例: 30";
+      }
+    }
+
+    async function loadMenus() {
       const list = document.getElementById("menu-list");
       list.innerHTML = "";
+      let menus = await apiGet('menu.php');
 
       // 既存データの初期在庫フィールドを補完（初回のみ）
       let needsSave = false;
@@ -124,10 +222,10 @@
         }
       });
       if (needsSave) {
-        localStorage.setItem("menuItems", JSON.stringify(menus));
+        await apiPost('menu.php', menus);
       }
 
-      if (menus.length === 0) {
+      if (!menus || menus.length === 0) {
         list.innerHTML = "<p>メニューが登録されていません。</p>";
         return;
       }
@@ -135,44 +233,60 @@
       menus.forEach((m, i) => {
         const div = document.createElement("div");
         div.className = "menu-item";
+        const stockDisplay = m.stock === -1 ? "無制限" : `${m.stock}食`;
         div.innerHTML = `
-          <p>🍱 ${m.name}　残り: ${m.stock}食</p>
+          <p>🍱 ${m.name}　残り: ${stockDisplay}</p>
           <button onclick="deleteMenu(${i})" class="btn btn-danger">削除</button>
         `;
         list.appendChild(div);
       });
     }
 
-    function addMenu() {
+    async function addMenu() {
       const name = document.getElementById("menu-name").value.trim();
-      const stock = parseInt(document.getElementById("menu-stock").value);
-      if (!name || stock <= 0) return alert("メニュー名と提供数を正しく入力してください。");
+      const unlimitedCheckbox = document.getElementById("unlimited-stock");
+      const stockInput = document.getElementById("menu-stock");
 
-      const menus = JSON.parse(localStorage.getItem("menuItems") || "[]");
-      menus.push({ name, stock, initialStock: stock });
-      localStorage.setItem("menuItems", JSON.stringify(menus));
+      if (!name) return alert("メニュー名を入力してください。");
+
+      let stock, initialStock;
+      if (unlimitedCheckbox.checked) {
+        stock = -1; // 無制限を-1で表現
+        initialStock = -1;
+      } else {
+        stock = parseInt(stockInput.value);
+        if (!stock || stock <= 0) return alert("提供数を正しく入力してください。");
+        initialStock = stock;
+      }
+
+      const menus = await apiGet('menu.php');
+      menus.push({ name, stock, initialStock });
+      await apiPost('menu.php', menus);
 
       document.getElementById("menu-name").value = "";
       document.getElementById("menu-stock").value = "";
+      document.getElementById("unlimited-stock").checked = false;
+      stockInput.disabled = false;
+      stockInput.placeholder = "例: 30";
       loadMenus();
     }
 
-    function deleteMenu(index) {
-      const menus = JSON.parse(localStorage.getItem("menuItems") || "[]");
+    async function deleteMenu(index) {
+      const menus = await apiGet('menu.php');
       menus.splice(index, 1);
-      localStorage.setItem("menuItems", JSON.stringify(menus));
+      await apiPost('menu.php', menus);
       loadMenus();
     }
 
     // === 休業日管理 ===
-    function addHoliday() {
+    async function addHoliday() {
       const date = document.getElementById("holiday-date").value;
       const reason = document.getElementById("holiday-reason").value.trim();
       if (!date || !reason) return alert("日付と理由を入力してください。");
 
-      const holidays = JSON.parse(localStorage.getItem("holidays") || "[]");
+      const holidays = await apiGet('holidays.php');
       holidays.push({ date, reason });
-      localStorage.setItem("holidays", JSON.stringify(holidays));
+      await apiPost('holidays.php', holidays);
 
       document.getElementById("holiday-date").value = "";
       document.getElementById("holiday-reason").value = "";
@@ -180,18 +294,46 @@
       renderCalendar();
     }
 
-    function loadHolidays() {
-      const holidays = JSON.parse(localStorage.getItem("holidays") || "[]");
+    async function loadHolidays() {
+      const holidays = await apiGet('holidays.php');
       const list = document.getElementById("holidays-list");
-      list.innerHTML = holidays.length
-        ? holidays.map(h => `<p>📅 ${h.date}　📝 ${h.reason}</p>`).join("")
-        : "<p>休業日は登録されていません。</p>";
+
+      if (!holidays || holidays.length === 0) {
+        list.innerHTML = "<p>休業日は登録されていません。</p>";
+        return;
+      }
+
+      // 日付順にソート
+      const sortedHolidays = holidays.sort((a, b) => a.date.localeCompare(b.date));
+
+      list.innerHTML = sortedHolidays.map((h, i) => {
+        const div = document.createElement("div");
+        div.className = "menu-item";
+        div.innerHTML = `
+          <p>📅 ${h.date}　📝 ${h.reason}</p>
+          <button onclick="deleteHoliday(${i})" class="btn btn-danger">削除</button>
+        `;
+        return div.outerHTML;
+      }).join('');
+    }
+
+    async function deleteHoliday(index) {
+      if (!confirm('この休業日を削除しますか？')) return;
+
+      const holidays = await apiGet('holidays.php');
+      holidays.splice(index, 1);
+      await apiPost('holidays.php', holidays);
+
+      // カレンダーを再描画してから休業日一覧を更新
+      await renderCalendar();
+      loadHolidays();
     }
 
     // === カレンダー表示 ===
-    function renderCalendar() {
+    async function renderCalendar() {
       const calendar = document.getElementById("calendar");
-      const holidays = JSON.parse(localStorage.getItem("holidays") || "[]");
+      const holidays = await apiGet('holidays.php');
+      const dailyMenus = await apiGet('daily-menu.php');
       const today = new Date();
       const year = today.getFullYear();
       const month = today.getMonth(); // 0始まり
@@ -203,7 +345,7 @@
       calendar.innerHTML = "";
 
       // 曜日
-      ["日","月","火","水","木","金","土"].forEach(d => {
+      ["日", "月", "火", "水", "木", "金", "土"].forEach(d => {
         const div = document.createElement("div");
         div.innerHTML = `<strong>${d}</strong>`;
         calendar.appendChild(div);
@@ -217,56 +359,220 @@
 
       // 日付
       for (let day = 1; day <= lastDay.getDate(); day++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+        const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
         const div = document.createElement("div");
-        const isHoliday = holidays.some(h => h.date === dateStr);
+        const holiday = holidays.find(h => h.date === dateStr);
+        const dailyMenu = dailyMenus.find(m => m.date === dateStr);
+        const isHoliday = !!holiday;
         div.textContent = day;
-        if (isHoliday) div.classList.add("holiday");
+        if (isHoliday) {
+          div.classList.add("holiday");
+        } else if (dailyMenu) {
+          div.innerHTML = `${day}<br><small>${dailyMenu.food}</small>`;
+        }
         calendar.appendChild(div);
       }
     }
 
+    // === 定食設定 ===
+    async function addDailyMenu() {
+      const date = document.getElementById("daily-menu-date").value;
+      const food = document.getElementById("daily-menu-food").value;
+      if (!date || !food) return alert("日付と定食メニューを選択してください。");
+
+      const dailyMenus = await apiGet('daily-menu.php');
+
+      // 同じ日付の設定がある場合は更新、なければ追加
+      const existingIndex = dailyMenus.findIndex(m => m.date === date);
+      if (existingIndex >= 0) {
+        dailyMenus[existingIndex].food = food;
+      } else {
+        dailyMenus.push({ date, food });
+      }
+
+      await apiPost('daily-menu.php', dailyMenus);
+
+      document.getElementById("daily-menu-date").value = "";
+      document.getElementById("daily-menu-food").value = "";
+      loadDailyMenus();
+      renderCalendar();
+    }
+
+    async function loadDailyMenus() {
+      const dailyMenus = await apiGet('daily-menu.php');
+      const list = document.getElementById("daily-menu-list");
+
+      if (!dailyMenus || dailyMenus.length === 0) {
+        list.innerHTML = "<p>定食設定はありません。</p>";
+        return;
+      }
+
+      // 日付順にソート
+      const sortedMenus = dailyMenus.sort((a, b) => a.date.localeCompare(b.date));
+
+      list.innerHTML = sortedMenus.map(m => {
+        const div = document.createElement("div");
+        div.className = "menu-item";
+        div.innerHTML = `
+          <p>📅 ${m.date}　🍽️ ${m.food}</p>
+          <button onclick="deleteDailyMenu('${m.date}')" class="btn btn-danger">削除</button>
+        `;
+        return div.outerHTML;
+      }).join('');
+    }
+
+    async function deleteDailyMenu(date) {
+      if (!confirm('この定食設定を削除しますか？')) return;
+
+      const dailyMenus = await apiGet('daily-menu.php');
+      const filtered = dailyMenus.filter(m => m.date !== date);
+      await apiPost('daily-menu.php', filtered);
+      loadDailyMenus();
+      renderCalendar();
+    }
+
     // === 予約一覧 ===
-    function loadReservations() {
-      const reservations = JSON.parse(localStorage.getItem("reservations") || "[]");
+    async function loadReservations() {
+      const reservations = await apiGet('reservations.php');
       const list = document.getElementById("reservations-list");
-      list.innerHTML = reservations.length
-        ? reservations.map(r => `<p>👤 ${r.name} 🍽️ ${r.food}</p>`).join("")
-        : "<p>予約はありません。</p>";
+
+      if (!reservations || reservations.length === 0) {
+        list.innerHTML = "<p>予約はありません。</p>";
+        return;
+      }
+
+      // メニュー別にグループ化し、重複する名前を削除
+      const grouped = {};
+      reservations.forEach(r => {
+        if (!grouped[r.food]) grouped[r.food] = new Set();
+        grouped[r.food].add(r.name);
+      });
+
+      // 各グループ内で名前順にソート
+      Object.keys(grouped).forEach(food => {
+        const uniqueNames = Array.from(grouped[food]).sort((a, b) => a.localeCompare(b, 'ja'));
+        grouped[food] = uniqueNames;
+      });
+
+      // メニュー名順にソートして表示
+      const sortedFoods = Object.keys(grouped).sort();
+      list.innerHTML = sortedFoods.map(food => {
+        const people = grouped[food].join('、');
+        const count = grouped[food].length;
+        return `
+          <div style="margin-bottom: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+            <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #333;">🍽️ ${food}</h3>
+            <p style="margin: 0 0 5px 0; font-size: 16px;">${people}</p>
+            <p style="margin: 0; font-size: 20px; font-weight: bold; color: #e74c3c;">👥 ${count}人</p>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // === 予約リセット ===
+    async function resetReservations() {
+      if (!confirm('本当にリセットしますか？\n全ての予約データが削除されます。')) {
+        return;
+      }
+
+      await apiPost('reservations.php', []);
+      loadReservations();
+      alert("全ての予約をリセットしました。");
     }
 
     // === 残数リセット ===
-    function resetMenuStocks() {
-  if (!confirm('本当にリセットしますか？\n全メニューの残数を初期値に戻します。')) {
-    return;
-  }
+    async function resetMenuStocks() {
+      if (!confirm('本当にリセットしますか？\n全メニューの残数を初期値に戻します。')) {
+        return;
+      }
 
-  let menus = JSON.parse(localStorage.getItem("menuItems") || "[]");
+      let menus = await apiGet('menu.php');
 
-  if (menus.length === 0) {
-    alert("メニューがありません。");
-    return;
-  }
+      if (menus.length === 0) {
+        alert("メニューがありません。");
+        return;
+      }
 
-  // 🔹 initialStock が存在しない古いデータのための補完
-  menus = menus.map(m => {
-    // もし initialStock が無ければ、現在の stock を初期値として保存
-    if (typeof m.initialStock !== "number" || m.initialStock <= 0) {
-      m.initialStock = m.stock;
+      // 🔹 initialStock が存在しない古いデータのための補完
+      menus = menus.map(m => {
+        // もし initialStock が無ければ、現在の stock を初期値として保存
+        if (typeof m.initialStock !== "number" || m.initialStock <= 0) {
+          m.initialStock = m.stock;
+        }
+        // リセット処理：残数を初期値に戻す（無制限の場合は-1のまま）
+        m.stock = m.initialStock;
+        return m;
+      });
+
+      await apiPost('menu.php', menus);
+
+      // メニューを再読み込み
+      loadMenus();
+
+      alert("全メニューの残数を初期値にリセットしました。");
     }
-    // リセット処理：残数を初期値に戻す
-    m.stock = m.initialStock;
-    return m;
-  });
 
-  localStorage.setItem("menuItems", JSON.stringify(menus));
 
-  // メニューを再読み込み
-  loadMenus();
+    // === 予約時間管理 ===
+    async function loadReservationTimes() {
+      try {
+        const times = await apiGet('reservation-times.php');
+        const displayDiv = document.getElementById('reservation-times-display');
 
-  alert("全メニューの残数を初期値にリセットしました。");
-}
+        if (times) {
+          displayDiv.innerHTML = `
+            <div style="padding: 15px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+              <p><strong>⏰ 予約可能時間:</strong> ${times.startTime} - ${times.endTime}</p>
+              <p><strong>📝 状態:</strong> ${times.enabled ? '✅ 有効' : '❌ 無効'}</p>
+              <p><strong>💬 メッセージ:</strong> ${times.message}</p>
+            </div>
+          `;
 
+          // フォームに現在の値を設定
+          document.getElementById('reservation-start-time').value = times.startTime;
+          document.getElementById('reservation-end-time').value = times.endTime;
+          document.getElementById('reservation-enabled').checked = times.enabled;
+          document.getElementById('reservation-message').value = times.message;
+        }
+      } catch (error) {
+        console.error('予約時間設定の読み込みエラー:', error);
+        document.getElementById('reservation-times-display').innerHTML =
+          '<p style="color: red;">予約時間設定の読み込みに失敗しました。</p>';
+      }
+    }
+
+    async function updateReservationTimes() {
+      const startTime = document.getElementById('reservation-start-time').value;
+      const endTime = document.getElementById('reservation-end-time').value;
+      const enabled = document.getElementById('reservation-enabled').checked;
+      const message = document.getElementById('reservation-message').value.trim();
+
+      if (!startTime || !endTime) {
+        alert('開始時間と終了時間を入力してください。');
+        return;
+      }
+
+      if (startTime >= endTime) {
+        alert('開始時間は終了時間より早く設定してください。');
+        return;
+      }
+
+      try {
+        const data = {
+          startTime: startTime,
+          endTime: endTime,
+          enabled: enabled,
+          message: message || `予約時間: ${startTime}-${endTime}`
+        };
+
+        await apiPost('reservation-times.php', data);
+        alert('予約時間設定を更新しました！');
+        loadReservationTimes();
+      } catch (error) {
+        console.error('予約時間設定の更新エラー:', error);
+        alert('予約時間設定の更新に失敗しました。');
+      }
+    }
 
     // === 起動時 ===
     function renderLinks() {
@@ -275,7 +581,7 @@
         { name: '生徒用サイト (index.html)', file: 'index.html' },
         { name: '管理者サイト (admin.html)', file: 'admin.html' },
         { name: '予約サイト (reservation.html)', file: 'reservation.html' },
-        { name: '食堂専用ChatGPT (chatgpt.html)', file: 'chatgpt.html' }
+        { name: '食堂専用AIアシスタント (ai-assistant-php.html)', file: 'ai-assistant-php.html' }
       ];
       const linksDiv = document.getElementById('page-links');
       if (!linksDiv) return;
@@ -285,13 +591,16 @@
       }).join('');
     }
 
-    window.onload = function() {
+    window.onload = function () {
       loadMenus();
       loadHolidays();
+      loadDailyMenus();
       loadReservations();
+      loadReservationTimes();
       renderCalendar();
       renderLinks();
     };
   </script>
 </body>
+
 </html>
