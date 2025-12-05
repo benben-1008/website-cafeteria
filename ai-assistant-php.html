@@ -7,6 +7,17 @@
     <title>食堂専用AIアシスタント</title>
     <link rel="stylesheet" href="styles.css">
     <style>
+        .page-bg {
+            background-image: url('images/olive.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        .container {
+            background-color: rgba(255, 255, 255, 0.92);
+        }
+
         .ai-settings {
             margin-top: 20px;
             padding: 15px;
@@ -46,14 +57,65 @@
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
+
+        /* 追加: アバターとメッセージレイアウト */
+        .message {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .message .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            background: #f0f0f0;
+            flex-shrink: 0;
+            border: 1px solid #e0e0e0;
+        }
+
+        .message .content {
+            flex: 1;
+        }
+
+        .assistant-message .avatar {
+            background: #e8f5e9;
+            border-color: #c8e6c9;
+        }
+
+        .user-message .avatar {
+            background: #eef2f7;
+            border-color: #d5deea;
+        }
+
+        /* ヒーロービジュアル */
+        .ai-hero {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #fff8e1;
+            border: 1px solid #ffe0b2;
+            font-size: 18px;
+            margin-top: 6px;
+        }
     </style>
 </head>
 
-<body>
+<body class="page-bg">
     <div class="container">
         <header>
             <h1>🍽️ 食堂専用AIアシスタント</h1>
             <p>メニュー、営業時間、予約についてお答えします</p>
+            <div class="ai-hero" aria-label="AIテーマ">
+                <span>🦙</span><span>＋</span><span>🍽️</span>
+                <span style="color:#6c757d; font-size:14px;">ラマ × 食堂</span>
+            </div>
         </header>
 
         <div class="chat-container">
@@ -84,6 +146,11 @@
                 <div id="ollamaStatus" class="status-indicator">🔄 チェック中...</div>
             </div>
         </div>
+
+        <section class="info-section">
+            <h2>📊 運営情報</h2>
+            <div id="ops-info" class="info-card"></div>
+        </section>
 
         <div class="back-link">
             <a href="index.html">← メインページに戻る</a>
@@ -156,6 +223,9 @@
                     sendMessage();
                 });
             });
+
+            // 運営情報を読み込み
+            loadOpsInfo();
         });
 
         // Ollamaの状態をチェック
@@ -202,6 +272,61 @@
             }
         }
 
+        // 運営情報（定食・休業日・予約時間・予約人数/混雑予測）
+        async function loadOpsInfo() {
+            const opsDiv = document.getElementById('ops-info');
+            if (!opsDiv) return;
+
+            const API_BASE = 'api/';
+            async function apiGet(path) {
+                const res = await fetch(API_BASE + path, { cache: 'no-store' });
+                if (!res.ok) throw new Error('GET failed: ' + path);
+                return await res.json();
+            }
+
+            try {
+                const [holidays, dailyMenus, reservationTimes, reservations] = await Promise.all([
+                    apiGet('holidays.php'),
+                    apiGet('daily-menu.php'),
+                    apiGet('reservation-times.php'),
+                    apiGet('reservations.php')
+                ]);
+
+                const today = new Date().toISOString().split('T')[0];
+                const todayMenu = (dailyMenus || []).find(m => m.date === today);
+                const todayHoliday = (holidays || []).find(h => h.date === today);
+
+                // 予約人数（本日）
+                const todaysReservations = (reservations || []).filter(r => (r.createdAt || '').startsWith(today));
+                const reservationCount = todaysReservations.length;
+
+                // 混雑予測（単純なルール）
+                let congestion = '空いています';
+                if (reservationCount >= 30) congestion = '非常に混雑';
+                else if (reservationCount >= 15) congestion = 'やや混雑';
+
+                // 予約時間表示
+                let timeHtml = '';
+                if (reservationTimes && reservationTimes.enabled) {
+                    timeHtml = `⏰ 予約時間: ${reservationTimes.startTime} - ${reservationTimes.endTime}<br>`;
+                } else {
+                    timeHtml = '⏰ 予約時間: 制限なし（いつでも予約可能）<br>';
+                }
+
+                opsDiv.innerHTML = `
+                    <div style="line-height:1.8;">
+                        <p><strong>📅 本日の営業状況:</strong> ${todayHoliday ? `🚫 休業（理由: ${todayHoliday.reason}）` : '✅ 営業予定'}</p>
+                        <p><strong>🍽️ 本日の定食:</strong> ${todayMenu ? todayMenu.food : '未設定'}</p>
+                        <p>${timeHtml}<strong>👥 本日の予約人数:</strong> ${reservationCount}人<br>
+                        <strong>📈 混雑予測:</strong> ${congestion}</p>
+                    </div>
+                `;
+            } catch (e) {
+                console.error('運営情報の読み込みに失敗:', e);
+                opsDiv.innerHTML = '<p style="color:#dc3545;">運営情報の読み込みに失敗しました。</p>';
+            }
+        }
+
         // メッセージをチャットに追加
         function addMessageToChat(sender, message) {
             const chatMessages = document.getElementById('chatMessages');
@@ -209,12 +334,16 @@
             messageDiv.className = `message ${sender}-message`;
 
             const senderName = sender === 'user' ? 'あなた' : 'AIアシスタント';
+            const avatarEmoji = sender === 'user' ? '👤' : '🦙🍽️';
             messageDiv.innerHTML = `
-                <div class="message-header">
-                    <strong>${senderName}</strong>
-                    <span class="message-time">${new Date().toLocaleTimeString('ja-JP')}</span>
+                <div class="avatar" aria-hidden="true">${avatarEmoji}</div>
+                <div class="content">
+                    <div class="message-header">
+                        <strong>${senderName}</strong>
+                        <span class="message-time">${new Date().toLocaleTimeString('ja-JP')}</span>
+                    </div>
+                    <div class="message-content">${message.replace(/\n/g, '<br>')}</div>
                 </div>
-                <div class="message-content">${message.replace(/\n/g, '<br>')}</div>
             `;
 
             chatMessages.appendChild(messageDiv);
@@ -248,6 +377,12 @@
 
                 const useOllama = document.getElementById('useOllama').checked;
 
+                // チャット履歴をAPI形式に変換（直近6ターンまで）
+                const historyForAPI = chatHistory.slice(-6).map(msg => ({
+                    role: msg.sender === 'user' ? 'user' : 'assistant',
+                    content: msg.message
+                }));
+
                 const response = await fetch('api/ai-response.php', {
                     method: 'POST',
                     headers: {
@@ -255,6 +390,7 @@
                     },
                     body: JSON.stringify({
                         message: userMessage,
+                        history: historyForAPI,
                         useOllama: useOllama
                     })
                 });
@@ -271,22 +407,30 @@
                 console.log('Ollama利用可能:', data.ollamaAvailable);
                 console.log('Ollama使用:', data.ollamaUsed);
                 console.log('APIタイプ:', data.apiType);
+                if (data.debug) {
+                    console.log('デバッグ情報:', data.debug);
+                }
                 console.log('========================');
 
                 if (data && data.response) {
-                    // メッセージにAPI情報を追加
-                    let messageWithInfo = data.response;
-                    if (data.ollamaUsed) {
-                        if (isProductionEnvironment()) {
-                            messageWithInfo += '\n\n🤖 *クラウドAI API が使用されました*';
-                        } else {
-                            messageWithInfo += '\n\n🤖 *Ollama AI が使用されました*';
+                    // エラーメッセージが含まれている場合、より詳細な情報を表示
+                    let responseText = data.response;
+
+                    // デバッグ情報がある場合、コンソールに詳細を表示
+                    if (data.debug && !data.ollamaUsed) {
+                        console.warn('Ollamaが使用されていません。');
+                        console.warn('デバッグ情報:', data.debug);
+
+                        // ユーザーに分かりやすいメッセージを追加
+                        if (!data.ollamaAvailable) {
+                            responseText += '\n\n💡 **ヒント**: Ollamaが起動していない可能性があります。ターミナルで "ollama serve" を実行してください。';
+                        } else if (!data.debug.useOllama) {
+                            responseText += '\n\n💡 **ヒント**: 「AI APIを使用する」にチェックが入っているか確認してください。';
                         }
-                    } else {
-                        messageWithInfo += '\n\n📝 *基本応答システムが使用されました*';
                     }
 
-                    addMessageToChat('assistant', messageWithInfo);
+                    // AIの応答を表示
+                    addMessageToChat('assistant', responseText);
                     chatHistory.push({ sender: 'assistant', message: data.response });
                 } else {
                     throw new Error('PHP APIからの応答が無効です');

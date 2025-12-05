@@ -6,9 +6,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>食堂予約システム</title>
   <link rel="stylesheet" href="styles.css">
+  <style>
+    .page-bg {
+      background-image: url('images/olive.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+    }
+
+    .container {
+      background-color: rgba(255, 255, 255, 0.92);
+    }
+  </style>
 </head>
 
-<body>
+<body class="page-bg">
   <div class="container">
     <header>
       <h1>🍽️ 食堂予約システム</h1>
@@ -46,50 +58,20 @@
         </div>
       </section>
 
+      <section class="reservation-status-section">
+        <div class="reservation-card">
+          <h2>📊 現在の予約状況</h2>
+          <div style="margin-bottom: 10px;">
+            <button onclick="refreshData()" class="btn btn-secondary">🔄 データを更新</button>
+          </div>
+          <div id="reservations-display">読み込み中...</div>
+        </div>
+      </section>
+
       <section class="menu-table-section">
         <div class="reservation-card">
-          <h2>📋 メニュー一覧</h2>
-          <table class="menu-table" style="width: 100%; border-collapse: collapse;">
-            <thead>
-              <tr>
-                <th style="text-align: left; border-bottom: 1px solid #ddd; padding: 8px;">メニュー</th>
-                <th style="text-align: right; border-bottom: 1px solid #ddd; padding: 8px;">値段（円）</th>
-                <th style="text-align: left; border-bottom: 1px solid #ddd; padding: 8px;">アレルギー</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">日替わり定食</td>
-                <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f0f0f0;">550</td>
-                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">未定</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">日替わり丼</td>
-                <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f0f0f0;">450</td>
-                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">未定</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">カレーライス</td>
-                <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f0f0f0;">450</td>
-                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">米</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">カツカレー</td>
-                <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f0f0f0;">500</td>
-                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">米</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">醤油ラーメン</td>
-                <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f0f0f0;">450</td>
-                <td style="padding: 8px; border-bottom: 1px solid #f0f0f0;">小麦</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px;">かけうどん</td>
-                <td style="padding: 8px; text-align: right;">350</td>
-                <td style="padding: 8px;">小麦</td>
-              </tr>
-            </tbody>
-          </table>
+          <h2>📋 現在のメニュー一覧</h2>
+          <div id="menu-display">読み込み中...</div>
         </div>
       </section>
     </main>
@@ -97,6 +79,22 @@
     <section class="info-section">
       <h2>🔗 URLリンク</h2>
       <div id="page-links" class="info-card"></div>
+
+      <div
+        style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">
+        <h3 style="color: #856404; margin-top: 0;">⚠️ 注意事項</h3>
+        <p style="color: #856404; margin-bottom: 10px;">
+          このサイトを正常に使用するには、ローカルサーバー経由でアクセスする必要があります。
+        </p>
+        <p style="color: #856404; margin-bottom: 10px;">
+          <strong>推奨方法:</strong><br>
+          1. コマンドプロンプトで <code>php -S localhost:8000</code> を実行<br>
+          2. ブラウザで <code>http://localhost:8000/reservation.html</code> にアクセス
+        </p>
+        <p style="color: #856404; margin: 0;">
+          <strong>テスト用:</strong> <a href="test-reservation.html" style="color: #856404;">API動作テストページ</a>
+        </p>
+      </div>
     </section>
 
     <footer>
@@ -104,160 +102,7 @@
     </footer>
   </div>
 
-  <script>
-    const API_BASE = 'api/';
-    async function apiGet(path) {
-      const res = await fetch(API_BASE + path, { cache: 'no-store' });
-      if (!res.ok) throw new Error('GET failed: ' + path);
-      return await res.json();
-    }
-    async function apiPost(path, data) {
-      const res = await fetch(API_BASE + path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      if (!res.ok) throw new Error('POST failed: ' + path);
-      return await res.json();
-    }
-    async function loadMenuOptions() {
-      const select = document.getElementById("food");
-      const menus = await apiGet('menu.php');
-      select.innerHTML = "";
-
-      if (menus.length === 0) {
-        select.innerHTML = "<option>メニューが設定されていません</option>";
-        select.disabled = true;
-        return;
-      }
-
-      menus.forEach(menu => {
-        const option = document.createElement("option");
-        option.value = menu.name;
-
-        if (menu.stock === -1) {
-          // 無制限メニュー
-          option.textContent = `${menu.name}（無制限）`;
-          option.disabled = false;
-        } else if (menu.stock > 0) {
-          // 通常メニュー（在庫あり）
-          option.textContent = `${menu.name}（残り${menu.stock}食）`;
-          option.disabled = false;
-        } else {
-          // 売り切れ
-          option.textContent = `${menu.name}（売り切れ）`;
-          option.disabled = true;
-        }
-
-        select.appendChild(option);
-      });
-    }
-
-    // 予約時間チェック機能
-    async function checkReservationTime() {
-      try {
-        const times = await apiGet('reservation-times.php');
-        const timeDisplay = document.getElementById('time-display');
-
-        if (!times || !times.enabled) {
-          timeDisplay.innerHTML = '<p style="color: #28a745;">✅ 予約時間制限なし（いつでも予約可能）</p>';
-          return true;
-        }
-
-        const now = new Date();
-        const currentTime = now.toTimeString().slice(0, 5); // HH:MM形式
-        const startTime = times.startTime;
-        const endTime = times.endTime;
-
-        const isWithinTime = currentTime >= startTime && currentTime <= endTime;
-
-        if (isWithinTime) {
-          timeDisplay.innerHTML = `
-            <p style="color: #28a745;">✅ 現在予約可能です</p>
-            <p style="font-size: 14px; color: #6c757d;">予約時間: ${startTime} - ${endTime}</p>
-            <p style="font-size: 14px; color: #6c757d;">現在時刻: ${currentTime}</p>
-          `;
-        } else {
-          timeDisplay.innerHTML = `
-            <p style="color: #dc3545;">❌ 現在は予約時間外です</p>
-            <p style="font-size: 14px; color: #6c757d;">予約時間: ${startTime} - ${endTime}</p>
-            <p style="font-size: 14px; color: #6c757d;">現在時刻: ${currentTime}</p>
-            <p style="font-size: 14px; color: #6c757d;">${times.message}</p>
-          `;
-        }
-
-        return isWithinTime;
-      } catch (error) {
-        console.error('予約時間チェックエラー:', error);
-        document.getElementById('time-display').innerHTML = '<p style="color: #dc3545;">❌ 予約時間の確認に失敗しました</p>';
-        return false;
-      }
-    }
-
-    document.getElementById("reservation-form").addEventListener("submit", async e => {
-      e.preventDefault();
-      const name = document.getElementById("student-name").value.trim();
-      const food = document.getElementById("food").value;
-      if (!name || !food) return alert("全ての項目を入力してください。");
-
-      // 予約時間チェック
-      const isWithinTime = await checkReservationTime();
-      if (!isWithinTime) {
-        alert("現在は予約時間外です。予約可能時間内に再度お試しください。");
-        return;
-      }
-
-      const menus = await apiGet('menu.php');
-      const menu = menus.find(m => m.name === food);
-      if (!menu || (menu.stock !== -1 && menu.stock <= 0)) {
-        alert("このメニューは売り切れです。");
-        return;
-      }
-
-      // 予約登録
-      const reservations = await apiGet('reservations.php');
-      reservations.push({ name, food, createdAt: new Date().toISOString() });
-      await apiPost('reservations.php', reservations);
-
-      // 在庫を減らす（無制限メニューは除く）
-      if (menu.stock !== -1) {
-        menu.stock -= 1;
-        await apiPost('menu.php', menus);
-      }
-
-      alert("予約が完了しました！");
-      document.getElementById("reservation-form").reset();
-      loadMenuOptions();
-    });
-
-    function resetForm() {
-      document.getElementById("reservation-form").reset();
-    }
-
-    function renderLinks() {
-      const base = window.location.href.replace(/[^/]*$/, '');
-      const pages = [
-        { name: '生徒用サイト (index.html)', file: 'index.html' },
-        { name: '予約サイト (reservation.html)', file: 'reservation.html' },
-        { name: '食堂専用AIアシスタント (ai-assistant-php.html)', file: 'ai-assistant-php.html' }
-      ];
-      const linksDiv = document.getElementById('page-links');
-      if (!linksDiv) return;
-      linksDiv.innerHTML = pages.map(p => {
-        const url = base + p.file;
-        return `<p><strong>${p.name}:</strong> <a href="${url}">${url}</a></p>`;
-      }).join('');
-    }
-
-    window.onload = function () {
-      loadMenuOptions();
-      checkReservationTime();
-      renderLinks();
-
-      // 1分ごとに予約時間をチェック
-      setInterval(checkReservationTime, 60000);
-    };
-  </script>
+  <script src="reservation-script.js"></script>
 </body>
 
 </html>
